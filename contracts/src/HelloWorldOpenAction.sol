@@ -2,22 +2,39 @@
 
 pragma solidity ^0.8.18;
 
-import {HubRestricted} from 'lens/HubRestricted.sol';
-import {Types} from 'lens/Types.sol';
-import {IPublicationActionModule} from 'lens/IPublicationActionModule.sol';
-import {LensModuleMetadata} from 'lens/LensModuleMetadata.sol';
-import {IHelloWorld} from './IHelloWorld.sol';
+import {HubRestricted} from "lens/HubRestricted.sol";
+import {Types} from "lens/Types.sol";
+import {IPublicationActionModule} from "lens/IPublicationActionModule.sol";
+import {LensModuleMetadata} from "lens/LensModuleMetadata.sol";
+import {IHelloWorld} from "./IHelloWorld.sol";
 
-contract HelloWorldOpenAction is HubRestricted, IPublicationActionModule, LensModuleMetadata {
-    mapping(uint256 profileId => mapping(uint256 pubId => string initMessage)) internal _initMessages;
+contract HelloWorldOpenAction is
+    HubRestricted,
+    IPublicationActionModule,
+    LensModuleMetadata
+{
+    struct RedEnvelope {
+        string token;
+        uint256 amount;
+    }
+    mapping(uint256 profileId => mapping(uint256 pubId => RedEnvelope))
+        internal _redEnvelopes;
     IHelloWorld internal _helloWorld;
-    
-    constructor(address lensHubProxyContract, address helloWorldContract, address moduleOwner) HubRestricted(lensHubProxyContract) LensModuleMetadata(moduleOwner) {
+
+    constructor(
+        address lensHubProxyContract,
+        address helloWorldContract,
+        address moduleOwner
+    ) HubRestricted(lensHubProxyContract) LensModuleMetadata(moduleOwner) {
         _helloWorld = IHelloWorld(helloWorldContract);
     }
 
-    function supportsInterface(bytes4 interfaceID) public pure override returns (bool) {
-        return interfaceID == type(IPublicationActionModule).interfaceId || super.supportsInterface(interfaceID);
+    function supportsInterface(
+        bytes4 interfaceID
+    ) public pure override returns (bool) {
+        return
+            interfaceID == type(IPublicationActionModule).interfaceId ||
+            super.supportsInterface(interfaceID);
     }
 
     function initializePublicationAction(
@@ -26,22 +43,34 @@ contract HelloWorldOpenAction is HubRestricted, IPublicationActionModule, LensMo
         address /* transactionExecutor */,
         bytes calldata data
     ) external override onlyHub returns (bytes memory) {
-        string memory initMessage = abi.decode(data, (string));
-
-        _initMessages[profileId][pubId] = initMessage;
-
+        (string memory token, uint256 amount) = abi.decode(
+            data,
+            (string, uint256)
+        );
+        _redEnvelopes[profileId][pubId] = RedEnvelope(token, amount);
         return data;
     }
 
     function processPublicationAction(
         Types.ProcessActionParams calldata params
     ) external override onlyHub returns (bytes memory) {
-        string memory initMessage = _initMessages[params.publicationActedProfileId][params.publicationActedId];
-        (string memory actionMessage) = abi.decode(params.actionModuleData, (string));
+        RedEnvelope storage redEnvelope = _redEnvelopes[
+            params.publicationActedProfileId
+        ][params.publicationActedId];
 
-        bytes memory combinedMessage = abi.encodePacked(initMessage, " ", actionMessage);
-        _helloWorld.helloWorld(string(combinedMessage), params.transactionExecutor);
-        
-        return combinedMessage;
+        string memory input = abi.decode(params.actionModuleData, (string));
+
+        require(
+            keccak256(abi.encodePacked(input)) ==
+                keccak256(abi.encodePacked(redEnvelope.token)),
+            "Incorrect token"
+        );
+        require(redEnvelope.amount > 0, "No red envelopes left");
+
+        redEnvelope.amount = 0;
+
+        // Transfer here
+
+        return abi.encodePacked("Red packet claimed");
     }
 }
