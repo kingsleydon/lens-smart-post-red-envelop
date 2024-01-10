@@ -2,6 +2,10 @@
 
 Post something with a red envelop and claim it with a token
 
+
+https://github.com/kingsleydon/lens-smart-post-red-envelop/assets/10992364/690c0f2e-e3b9-40d0-a73c-e3dfb689133a
+
+
 > Original README
 
 # Lens Hello World Smart Post
